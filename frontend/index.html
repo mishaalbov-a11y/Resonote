@@ -1,0 +1,22 @@
+<script type="module">
+  import { initAudio, loadAllSamples, playSample, getNoteMidi,
+           playKick, playSnare, playHihat } from './js/audio.js';
+
+  document.body.addEventListener('click', async () => {
+    initAudio();
+    await loadAllSamples();
+  }, { once: true });
+
+  // Тест пианино на разных нотах пентатоники
+  const notes = [60, 62, 64, 67, 69, 72];
+  notes.forEach(midi => {
+    const btn = document.createElement('button');
+    btn.textContent = `Piano ${midi}`;
+    btn.onclick = () => playSample('piano', midi);
+    document.body.appendChild(btn);
+  });
+
+  document.getElementById('kickBtn').onclick  = () => playKick();
+  document.getElementById('snareBtn').onclick = () => playSnare();
+  document.getElementById('hihatBtn').onclick = () => playHihat();
+</script>
