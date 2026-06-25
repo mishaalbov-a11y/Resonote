@@ -23,51 +23,76 @@ const SCALES = {
 
 const ROW_OCTAVE = [0, -12, -24, -36, -36, 0, 0, 0];
 
-function midiToFreq(midi) {
-  return 440 * Math.pow(2, (midi - 69) / 12);
-}
-
-export function getNoteFreq(col, row, key) {
-  const scale = SCALES[key] || SCALES['C'];
-  const midi = scale[col] + ROW_OCTAVE[row];
-  return midiToFreq(midi);
-}
-
 export function getNoteMidi(col, row, key) {
   const scale = SCALES[key] || SCALES['C'];
   return scale[col] + ROW_OCTAVE[row];
 }
 
+export function getNoteFreq(col, row, key) {
+  return midiToFreq(getNoteMidi(col, row, key));
+}
+
+function midiToFreq(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
 // ── Семплер ────────────────────────────────────
 const sampleBuffers = {};
 
-// Базовая нота семпла — C4 = MIDI 60
-// Если твой файл записан на другой ноте — измени это число
+// Базовая MIDI нота каждого семпла
+// Если семпл записан на C4 = 60, транспонирование идёт от 60
 const SAMPLE_BASE_MIDI = {
-  piano: 60,  // C4
+  piano:  60,  // C4
+  harp:   60,  // C4
+  bell:   60,  // C4
+  guitar: 52,  // E4
+  organ:  48,  // C3
+  bass:   31,  // G1 — записан на G1
 };
 
-export async function loadSample(name, url) {
+// Настройки огибающей для каждого инструмента
+const SAMPLE_ENV = {
+  piano:  { attack: 0.008, release: 2.5,  vol: 0.85 },
+  harp:   { attack: 0.004, release: 2.0,  vol: 0.80 },
+  bell:   { attack: 0.003, release: 3.5,  vol: 0.75 },
+  guitar: { attack: 0.012, release: 1.8,  vol: 0.80 },
+  organ:  { attack: 0.06,  release: 1.2,  vol: 0.70 },
+  bass:   { attack: 0.010, release: 1.0,  vol: 0.90 },
+};
+
+async function loadSample(name, url) {
   try {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer();
     sampleBuffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
-    console.log(`✓ Семпл загружен: ${name}`);
+    console.log(`✓ ${name}`);
   } catch (e) {
-    console.error(`✗ Ошибка загрузки семпла ${name}:`, e);
+    console.error(`✗ Ошибка загрузки ${name}:`, e);
   }
 }
 
 export async function loadAllSamples() {
-  await loadSample('piano', './samples/piano.wav');
-  // Сюда позже добавим остальные инструменты
+  console.log('Загружаем семплы...');
+  await Promise.all([
+    loadSample('piano',  './samples/piano.wav'),
+    loadSample('harp',   './samples/harp.wav'),
+    loadSample('bell',   './samples/bell.wav'),
+    loadSample('guitar', './samples/guitar.wav'),
+    loadSample('organ',  './samples/organ.wav'),
+    loadSample('bass',   './samples/bass.wav'),
+    loadSample('kick',   './samples/kick.wav'),
+    loadSample('snare',  './samples/snare.wav'),
+    loadSample('hihat',  './samples/hihat.wav'),
+    loadSample('drum4',  './samples/drum4.wav'),
+  ]);
+  console.log('✓ Все семплы загружены');
 }
 
 // ── Воспроизведение семпла ─────────────────────
 export function playSample(inst, targetMidi, time = null) {
   if (!audioCtx || !masterGain) return;
   if (!sampleBuffers[inst]) {
-    console.warn(`Семпл ${inst} не загружен`);
+    console.warn(`Семпл не загружен: ${inst}`);
     return;
   }
 
@@ -78,69 +103,56 @@ export function playSample(inst, targetMidi, time = null) {
   const volJitter = 0.88 + Math.random() * 0.24;
   const startTime = t + Math.max(0, jitter);
 
+  const env = SAMPLE_ENV[inst] ?? { attack: 0.01, release: 1.5, vol: 0.8 };
+
   const src  = audioCtx.createBufferSource();
   const gain = audioCtx.createGain();
 
   src.buffer = sampleBuffers[inst];
 
-  // Транспонирование через playbackRate
-  const semitones = targetMidi - (SAMPLE_BASE_MIDI[inst] ?? 60);
+  // Транспонирование
+  const baseMidi = SAMPLE_BASE_MIDI[inst] ?? 60;
+  const semitones = targetMidi - baseMidi;
   src.playbackRate.value = Math.pow(2, semitones / 12);
 
   // Огибающая
+  const peak = env.vol * volJitter;
   gain.gain.setValueAtTime(0, startTime);
-  gain.gain.linearRampToValueAtTime(0.85 * volJitter, startTime + 0.008);
-  gain.gain.linearRampToValueAtTime(0, startTime + 2.5);
+  gain.gain.linearRampToValueAtTime(peak, startTime + env.attack);
+  gain.gain.linearRampToValueAtTime(0, startTime + env.release);
 
   src.connect(gain);
   gain.connect(masterGain);
   src.start(startTime);
 }
 
-// ── Ударные (синтез) ───────────────────────────
-export function playKick(time = null) {
+// ── Воспроизведение ударных (без питча) ────────
+export function playDrum(inst, time = null) {
   if (!audioCtx || !masterGain) return;
+  if (!sampleBuffers[inst]) {
+    console.warn(`Семпл не загружен: ${inst}`);
+    return;
+  }
+
   const t = time ?? audioCtx.currentTime;
-  const osc  = audioCtx.createOscillator();
+  const volJitter = 0.88 + Math.random() * 0.24;
+
+  const src  = audioCtx.createBufferSource();
   const gain = audioCtx.createGain();
-  osc.frequency.setValueAtTime(150, t);
-  osc.frequency.exponentialRampToValueAtTime(40, t + 0.18);
-  gain.gain.setValueAtTime(0.9, t);
-  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
-  osc.connect(gain); gain.connect(masterGain);
-  osc.start(t); osc.stop(t + 0.3);
+
+  src.buffer = sampleBuffers[inst];
+  src.playbackRate.value = 1.0; // тон не меняем
+
+  gain.gain.setValueAtTime(0.85 * volJitter, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+
+  src.connect(gain);
+  gain.connect(masterGain);
+  src.start(t);
 }
 
-export function playSnare(time = null) {
-  if (!audioCtx || !masterGain) return;
-  const t = time ?? audioCtx.currentTime;
-  const buf  = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.15, audioCtx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-  const src    = audioCtx.createBufferSource();
-  const gain   = audioCtx.createGain();
-  const filter = audioCtx.createBiquadFilter();
-  src.buffer = buf;
-  filter.type = 'highpass'; filter.frequency.value = 1200;
-  gain.gain.setValueAtTime(0.35, t);
-  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-  src.connect(filter); filter.connect(gain); gain.connect(masterGain);
-  src.start(t); src.stop(t + 0.18);
-}
-
-export function playHihat(time = null) {
-  if (!audioCtx || !masterGain) return;
-  const t = time ?? audioCtx.currentTime;
-  const buf  = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-  const src    = audioCtx.createBufferSource();
-  const gain   = audioCtx.createGain();
-  const filter = audioCtx.createBiquadFilter();
-  src.buffer = buf;
-  filter.type = 'highpass'; filter.frequency.value = 7000;
-  gain.gain.setValueAtTime(0.14, t);
-  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
-  src.connect(filter); filter.connect(gain); gain.connect(masterGain);
-  src.start(t); src.stop(t + 0.06);
-}
+// Удобные обёртки для ударных
+export const playKick  = (t) => playDrum('kick',  t);
+export const playSnare = (t) => playDrum('snare', t);
+export const playHihat = (t) => playDrum('hihat', t);
+export const playDrum4 = (t) => playDrum('drum4', t);
