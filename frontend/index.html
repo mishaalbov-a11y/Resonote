@@ -4,141 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Resonote</title>
-  <style>
-    body {
-      background: #080c14;
-      color: #e2e8f0;
-      font-family: sans-serif;
-      padding: 24px;
-    }
-
-    h1 {
-      margin-bottom: 8px;
-    }
-
-    #status {
-      font-size: 13px;
-      color: #64748b;
-      margin-bottom: 24px;
-    }
-
-    .section {
-      margin-bottom: 24px;
-    }
-
-    .section h2 {
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #64748b;
-      margin-bottom: 10px;
-    }
-
-    .buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    button {
-      padding: 8px 18px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: #0d1220;
-      color: #e2e8f0;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 180ms;
-    }
-
-    button:hover {
-      background: #1e293b;
-      border-color: rgba(255,255,255,0.25);
-    }
-
-    button:active {
-      background: #38bdf8;
-      color: #080c14;
-    }
-  </style>
+  <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
 
   <h1>Resonote</h1>
-  <div id="status">Нажми любую кнопку для инициализации звука...</div>
-
-  <div class="section">
-    <h2>Мелодические инструменты</h2>
-    <div class="buttons">
-      <button id="pianoBtn">Piano</button>
-      <button id="harpBtn">Harp</button>
-      <button id="bellBtn">Bell</button>
-      <button id="guitarBtn">Guitar</button>
-      <button id="organBtn">Organ</button>
-      <button id="bassBtn">Bass</button>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>Ударные</h2>
-    <div class="buttons">
-      <button id="kickBtn">Kick</button>
-      <button id="snareBtn">Snare</button>
-      <button id="hihatBtn">Hi-Hat</button>
-      <button id="drum4Btn">Drum4</button>
-    </div>
-  </div>
+  <canvas id="gameCanvas"></canvas>
 
   <script type="module">
-    import {
-      initAudio,
-      loadAllSamples,
-      playSample,
-      getNoteMidi,
-      playKick,
-      playSnare,
-      playHihat,
-      playDrum4
-    } from './js/audio.js';
-
-    let ready = false;
-
-    // Первый клик — инициализация и загрузка всех семплов
-    document.body.addEventListener('click', async () => {
-      if (ready) return;
-      initAudio();
-      document.getElementById('status').textContent = 'Загружаем семплы...';
-      await loadAllSamples();
-      ready = true;
-      document.getElementById('status').textContent = '✓ Готово! Все семплы загружены.';
-    }, { once: true });
-
-    // Случайная нота из пентатоники C для теста
-    const testNotes = [60, 62, 64, 67, 69, 72];
-    function rndNote() {
-      return testNotes[Math.floor(Math.random() * testNotes.length)];
-    }
-
-    // Мелодические
-    // document.getElementById('pianoBtn').onclick  = () => playSample('piano',  rndNote());
-    // document.getElementById('harpBtn').onclick   = () => playSample('harp',   rndNote());
-    // document.getElementById('bellBtn').onclick   = () => playSample('bell',   rndNote());
-    // document.getElementById('guitarBtn').onclick = () => playSample('guitar', rndNote());
-    // document.getElementById('organBtn').onclick  = () => playSample('organ',  rndNote());
-    // document.getElementById('bassBtn').onclick   = () => playSample('bass',   rndNote() - 24);
-    // Мелодические — все на C3 = MIDI 48
-    document.getElementById('pianoBtn').onclick  = () => playSample('piano',  48);
-    document.getElementById('harpBtn').onclick   = () => playSample('harp',   60);
-    document.getElementById('bellBtn').onclick   = () => playSample('bell',   24);
-    document.getElementById('guitarBtn').onclick = () => playSample('guitar', 36);
-    document.getElementById('organBtn').onclick  = () => playSample('organ',  60);
-    document.getElementById('bassBtn').onclick   = () => playSample('bass',   48);
-
-    // Ударные
-    document.getElementById('kickBtn').onclick  = () => playKick();
-    document.getElementById('snareBtn').onclick = () => playSnare();
-    document.getElementById('hihatBtn').onclick = () => playHihat();
-    document.getElementById('drum4Btn').onclick = () => playDrum4();
+    import { initCanvas } from './js/canvas.js';
+    initCanvas(document.getElementById('gameCanvas'));
   </script>
 
 </body>
