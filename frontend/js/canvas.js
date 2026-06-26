@@ -5,31 +5,30 @@ const GRAVITY   = 800;
 const FRICTION  = 0.995;
 const BOUNCE    = 0.75;
 const MIN_SPEED = 5;
-const MAX_SPEED = 1200; // максимальная скорость броска
-const WALL_INNER = 2; // внутренний край рамки (половина lineWidth × 2)
+const MAX_SPEED = 1200;
+const WALL_INNER = 2;
 
 let canvas, ctx;
 
-let ball = {
-  x: FIELD_SIZE / 2,
-  y: FIELD_SIZE / 2,
-  vx: 0,
-  vy: 0,
-  radius: BALL_RADIUS,
-  active: false  // ждёт броска
-};
+let balls = [];
+const MAX_BALLS = 3;
 
-// ── Состояние броска ───────────────────────────
 let isDragging = false;
-let dragStart  = { x: 0, y: 0 };
+let dragTarget = null;
 let dragNow    = { x: 0, y: 0 };
 
+// ── Фабрика шарика ─────────────────────────────
+function createBall(x, y) {
+  return { x, y, vx: 0, vy: 0, radius: BALL_RADIUS, active: false };
+}
+
+// ── Инициализация ──────────────────────────────
 export function initCanvas(canvasElement) {
   canvas = canvasElement;
   ctx = canvas.getContext('2d');
   canvas.width  = FIELD_SIZE;
   canvas.height = FIELD_SIZE;
-
+  canvas.addEventListener('contextmenu', onRightClick);
   canvas.addEventListener('mousedown', onMouseDown);
   canvas.addEventListener('mousemove', onMouseMove);
   canvas.addEventListener('mouseup',   onMouseUp);
@@ -47,20 +46,34 @@ function getPos(e) {
 }
 
 function onMouseDown(e) {
-  // Начинаем тянуть только если кликнули по шарику
-  const pos = getPos(e);
-  const dx = pos.x - ball.x;
-  const dy = pos.y - ball.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (e.button !== 0) return; // только ЛКМ (button 0)
+  if (canvas.dataset.mode !== 'play') return;
 
-  if (dist <= ball.radius * 3) { // небольшая зона захвата вокруг шарика
-    isDragging = true;
-    dragStart  = { ...pos };
-    dragNow    = { ...pos };
-    ball.active = false; // останавливаем шарик пока тянем
-    ball.vx = 0;
-    ball.vy = 0;
+  const pos = getPos(e);
+
+  // Если кликнули на существующий шарик — тянем его
+  for (let b of balls) {
+    const dx = pos.x - b.x;
+    const dy = pos.y - b.y;
+    if (Math.sqrt(dx*dx + dy*dy) <= b.radius * 3) {
+      isDragging = true;
+      dragTarget = b;
+      dragNow    = { ...pos };
+      b.active = false;
+      b.vx = 0;
+      b.vy = 0;
+      return;
+    }
   }
+
+  // Иначе — создаём новый шарик если есть слот
+  if (balls.length >= MAX_BALLS) return;
+
+  const b = createBall(pos.x, pos.y);
+  balls.push(b);
+  isDragging = true;
+  dragTarget = b;
+  dragNow    = { ...pos };
 }
 
 function onMouseMove(e) {
@@ -71,58 +84,77 @@ function onMouseMove(e) {
 function onMouseUp(e) {
   if (!isDragging) return;
   isDragging = false;
-
   dragNow = getPos(e);
 
-  // Вектор оттяжки — от текущей позиции мыши к шарику
-  const dx = ball.x - dragNow.x;
-  const dy = ball.y - dragNow.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const dx = dragTarget.x - dragNow.x;
+  const dy = dragTarget.y - dragNow.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
 
-  // Минимальная оттяжка 10px
-  if (dist < 10) return;
+  if (dist < 10) {
+  dragTarget.active = true; // просто падает вниз без импульса
+  dragTarget = null;
+  return;
+}
 
-  // Скорость пропорциональна оттяжке, ограничена MAX_SPEED
   const speed = Math.min(dist * 4, MAX_SPEED);
-  ball.vx = (dx / dist) * speed;
-  ball.vy = (dy / dist) * speed;
-  ball.active = true;
+  dragTarget.vx = (dx / dist) * speed;
+  dragTarget.vy = (dy / dist) * speed;
+  dragTarget.active = true;
+  dragTarget = null;
+}
+
+function onRightClick(e) {
+  e.preventDefault(); // отключаем стандартное контекстное меню
+
+  if (canvas.dataset.mode !== 'play') return;
+
+  const pos = getPos(e);
+
+  for (let i = 0; i < balls.length; i++) {
+    const dx = pos.x - balls[i].x;
+    const dy = pos.y - balls[i].y;
+    if (Math.sqrt(dx*dx + dy*dy) <= balls[i].radius * 3) {
+      balls.splice(i, 1);
+      return;
+    }
+  }
 }
 
 // ── Физика ─────────────────────────────────────
 function update(dt) {
-  if (!ball.active) return;
+  for (let b of balls) {
+    if (!b.active) continue;
 
-  ball.vy += GRAVITY * dt;
-  ball.vx *= FRICTION;
-  ball.vy *= FRICTION;
+    b.vy += GRAVITY * dt;
+    b.vx *= FRICTION;
+    b.vy *= FRICTION;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
 
-  ball.x += ball.vx * dt;
-  ball.y += ball.vy * dt;
+    if (b.x - b.radius <= WALL_INNER) {
+      b.x = WALL_INNER + b.radius;
+      b.vx = Math.abs(b.vx) * BOUNCE;
+    }
+    if (b.x + b.radius >= FIELD_SIZE - WALL_INNER) {
+      b.x = FIELD_SIZE - WALL_INNER - b.radius;
+      b.vx = -Math.abs(b.vx) * BOUNCE;
+    }
+    if (b.y - b.radius <= WALL_INNER) {
+      b.y = WALL_INNER + b.radius;
+      b.vy = Math.abs(b.vy) * BOUNCE;
+    }
+    if (b.y + b.radius >= FIELD_SIZE - WALL_INNER) {
+      b.y = FIELD_SIZE - WALL_INNER - b.radius;
+      b.vy = -Math.abs(b.vy) * BOUNCE;
+    }
 
-  if (ball.x - ball.radius <= WALL_INNER) {
-  ball.x = WALL_INNER + ball.radius;
-  ball.vx = Math.abs(ball.vx) * BOUNCE;
-}
-if (ball.x + ball.radius >= FIELD_SIZE - WALL_INNER) {
-  ball.x = FIELD_SIZE - WALL_INNER - ball.radius;
-  ball.vx = -Math.abs(ball.vx) * BOUNCE;
-}
-if (ball.y - ball.radius <= WALL_INNER) {
-  ball.y = WALL_INNER + ball.radius;
-  ball.vy = Math.abs(ball.vy) * BOUNCE;
-}
-if (ball.y + ball.radius >= FIELD_SIZE - WALL_INNER) {
-  ball.y = FIELD_SIZE - WALL_INNER - ball.radius;
-  ball.vy = -Math.abs(ball.vy) * BOUNCE;
-}
-
-  const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
-  if (speed < MIN_SPEED && ball.y + ball.radius >= FIELD_SIZE - WALL_INNER - 1) {
-  ball.vx = 0;
-  ball.vy = 0;
-  ball.active = false;
-}
+    const speed = Math.sqrt(b.vx**2 + b.vy**2);
+    if (speed < MIN_SPEED && b.y + b.radius >= FIELD_SIZE - WALL_INNER - 1) {
+      b.vx = 0;
+      b.vy = 0;
+      b.active = false;
+    }
+  }
 }
 
 // ── Отрисовка ──────────────────────────────────
@@ -134,60 +166,57 @@ function draw() {
   ctx.lineWidth = 2;
   ctx.strokeRect(1, 1, FIELD_SIZE - 2, FIELD_SIZE - 2);
 
-  // Линия оттяжки пока тянем
-  if (isDragging) {
-     drawTrajectory();
+  // Шарики
+  for (let b of balls) {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'white';
+    ctx.fill();
   }
 
-  // Шарик
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-  ctx.fillStyle = 'white';
-  ctx.fill();
+  // Траектория для перетаскиваемого шарика
+  if (isDragging && dragTarget) {
+    drawTrajectory(dragTarget);
+  }
 }
 
-function drawTrajectory() {
-  const dx = ball.x - dragNow.x;
-  const dy = ball.y - dragNow.y;
+// ── Траектория ─────────────────────────────────
+function drawTrajectory(b) {
+  const dx = b.x - dragNow.x;
+  const dy = b.y - dragNow.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
 
   if (dist < 10) return;
 
-  // Начальная скорость — та же формула что в onMouseUp
   const speed = Math.min(dist * 4, MAX_SPEED);
   const vx = (dx / dist) * speed;
   const vy = (dy / dist) * speed;
 
-  const NUM_DOTS = 20;        // максимум точек
-  const TIME_STEP = 0.05;     // было 0.06 — точки чаще, расстояние между ними меньше
-  const MAX_RADIUS = 2.3;     // было 5 — ближняя точка меньше шарика (шарик = 6)
-  const MIN_RADIUS = 0.8;     // было 1.5 — дальняя точка совсем маленькая
+  const NUM_DOTS  = 20;
+  const TIME_STEP = 0.05;
+  const MAX_RADIUS = 2.3;
+  const MIN_RADIUS = 0.8;
 
-  // Нормализуем импульс: 0..1 относительно MAX_SPEED
-  const power = Math.min(dist * 4, MAX_SPEED) / MAX_SPEED;
-  // Количество точек зависит от силы броска
+  const power    = speed / MAX_SPEED;
   const dotCount = Math.max(2, Math.round(NUM_DOTS * power));
 
-  let px = ball.x;
-  let py = ball.y;
+  let px = b.x;
+  let py = b.y;
   let pvx = vx;
   let pvy = vy;
 
   for (let i = 0; i < dotCount; i++) {
-    // Симулируем физику
     pvy += GRAVITY * TIME_STEP;
     pvx *= FRICTION;
     pvy *= FRICTION;
-    px += pvx * TIME_STEP;
-    py += pvy * TIME_STEP;
+    px  += pvx * TIME_STEP;
+    py  += pvy * TIME_STEP;
 
-    // Останавливаем если вышли за пределы поля
     if (px < WALL_INNER || px > FIELD_SIZE - WALL_INNER ||
         py < WALL_INNER || py > FIELD_SIZE - WALL_INNER) break;
 
-    // Радиус и прозрачность уменьшаются с расстоянием
-    const t = i / (dotCount - 1);           // 0 = близко, 1 = далеко
-    const r = MAX_RADIUS - t * (MAX_RADIUS - MIN_RADIUS);
+    const t     = i / (dotCount - 1);
+    const r     = MAX_RADIUS - t * (MAX_RADIUS - MIN_RADIUS);
     const alpha = 0.8 - t * 0.5;
 
     ctx.beginPath();
