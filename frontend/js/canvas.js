@@ -6,6 +6,7 @@ const FRICTION  = 0.995;
 const BOUNCE    = 0.75;
 const MIN_SPEED = 5;
 const MAX_SPEED = 1200; // максимальная скорость броска
+const WALL_INNER = 2; // внутренний край рамки (половина lineWidth × 2)
 
 let canvas, ctx;
 
@@ -99,29 +100,29 @@ function update(dt) {
   ball.x += ball.vx * dt;
   ball.y += ball.vy * dt;
 
-  if (ball.x - ball.radius <= 0) {
-    ball.x = ball.radius;
-    ball.vx = Math.abs(ball.vx) * BOUNCE;
-  }
-  if (ball.x + ball.radius >= FIELD_SIZE) {
-    ball.x = FIELD_SIZE - ball.radius;
-    ball.vx = -Math.abs(ball.vx) * BOUNCE;
-  }
-  if (ball.y - ball.radius <= 0) {
-    ball.y = ball.radius;
-    ball.vy = Math.abs(ball.vy) * BOUNCE;
-  }
-  if (ball.y + ball.radius >= FIELD_SIZE) {
-    ball.y = FIELD_SIZE - ball.radius;
-    ball.vy = -Math.abs(ball.vy) * BOUNCE;
-  }
+  if (ball.x - ball.radius <= WALL_INNER) {
+  ball.x = WALL_INNER + ball.radius;
+  ball.vx = Math.abs(ball.vx) * BOUNCE;
+}
+if (ball.x + ball.radius >= FIELD_SIZE - WALL_INNER) {
+  ball.x = FIELD_SIZE - WALL_INNER - ball.radius;
+  ball.vx = -Math.abs(ball.vx) * BOUNCE;
+}
+if (ball.y - ball.radius <= WALL_INNER) {
+  ball.y = WALL_INNER + ball.radius;
+  ball.vy = Math.abs(ball.vy) * BOUNCE;
+}
+if (ball.y + ball.radius >= FIELD_SIZE - WALL_INNER) {
+  ball.y = FIELD_SIZE - WALL_INNER - ball.radius;
+  ball.vy = -Math.abs(ball.vy) * BOUNCE;
+}
 
   const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
-  if (speed < MIN_SPEED && ball.y + ball.radius >= FIELD_SIZE - 1) {
-    ball.vx = 0;
-    ball.vy = 0;
-    ball.active = false;
-  }
+  if (speed < MIN_SPEED && ball.y + ball.radius >= FIELD_SIZE - WALL_INNER - 1) {
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.active = false;
+}
 }
 
 // ── Отрисовка ──────────────────────────────────
@@ -135,20 +136,7 @@ function draw() {
 
   // Линия оттяжки пока тянем
   if (isDragging) {
-    // Пунктирная линия от шарика до мыши
-    ctx.beginPath();
-    ctx.moveTo(ball.x, ball.y);
-    ctx.lineTo(dragNow.x, dragNow.y);
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Стрелка направления полёта (противоположно оттяжке)
-    const dx = ball.x - dragNow.x;
-    const dy = ball.y - dragNow.y;
-    drawArrow(ball.x, ball.y, ball.x + dx, ball.y + dy);
+     drawTrajectory();
   }
 
   // Шарик
@@ -158,27 +146,55 @@ function draw() {
   ctx.fill();
 }
 
-function drawArrow(x1, y1, x2, y2) {
-  const headLen = 10;
-  const angle = Math.atan2(y2 - y1, x2 - x1);
+function drawTrajectory() {
+  const dx = ball.x - dragNow.x;
+  const dy = ball.y - dragNow.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
 
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  if (dist < 10) return;
 
-  // Наконечник
-  ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6),
-             y2 - headLen * Math.sin(angle - Math.PI / 6));
-  ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6),
-             y2 - headLen * Math.sin(angle + Math.PI / 6));
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.fill();
+  // Начальная скорость — та же формула что в onMouseUp
+  const speed = Math.min(dist * 4, MAX_SPEED);
+  const vx = (dx / dist) * speed;
+  const vy = (dy / dist) * speed;
+
+  const NUM_DOTS = 20;        // максимум точек
+  const TIME_STEP = 0.05;     // было 0.06 — точки чаще, расстояние между ними меньше
+  const MAX_RADIUS = 2.3;     // было 5 — ближняя точка меньше шарика (шарик = 6)
+  const MIN_RADIUS = 0.8;     // было 1.5 — дальняя точка совсем маленькая
+
+  // Нормализуем импульс: 0..1 относительно MAX_SPEED
+  const power = Math.min(dist * 4, MAX_SPEED) / MAX_SPEED;
+  // Количество точек зависит от силы броска
+  const dotCount = Math.max(2, Math.round(NUM_DOTS * power));
+
+  let px = ball.x;
+  let py = ball.y;
+  let pvx = vx;
+  let pvy = vy;
+
+  for (let i = 0; i < dotCount; i++) {
+    // Симулируем физику
+    pvy += GRAVITY * TIME_STEP;
+    pvx *= FRICTION;
+    pvy *= FRICTION;
+    px += pvx * TIME_STEP;
+    py += pvy * TIME_STEP;
+
+    // Останавливаем если вышли за пределы поля
+    if (px < WALL_INNER || px > FIELD_SIZE - WALL_INNER ||
+        py < WALL_INNER || py > FIELD_SIZE - WALL_INNER) break;
+
+    // Радиус и прозрачность уменьшаются с расстоянием
+    const t = i / (dotCount - 1);           // 0 = близко, 1 = далеко
+    const r = MAX_RADIUS - t * (MAX_RADIUS - MIN_RADIUS);
+    const alpha = 0.8 - t * 0.5;
+
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fill();
+  }
 }
 
 // ── Игровой цикл ───────────────────────────────
