@@ -24,10 +24,12 @@ body {
 }
 
 #logo {
-  font-size: 1.1rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  opacity: 0.9;
+  position: fixed;
+  top: 20px;
+  left: 24px;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 #main {

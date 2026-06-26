@@ -8,11 +8,9 @@
 </head>
 <body>
 
-  <div id="app">
-    <div id="top-bar">
-      <span id="logo">Resonote</span>
-    </div>
+  <span id="logo">Resonote</span>
 
+  <div id="app">
     <div id="main">
       <canvas id="gameCanvas"></canvas>
 
@@ -27,16 +25,15 @@
         </button>
       </div>
     </div>
-
   </div>
 
   <script type="module">
     import { initCanvas } from './js/canvas.js';
 
     const canvas = document.getElementById('gameCanvas');
+    canvas.dataset.mode = 'play';
     initCanvas(canvas);
 
-    // Переключение режимов
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -44,9 +41,6 @@
         canvas.dataset.mode = btn.dataset.mode;
       });
     });
-
-    // Режим по умолчанию
-    canvas.dataset.mode = 'play';
   </script>
 
 </body>
