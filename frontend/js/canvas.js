@@ -1,10 +1,11 @@
+import { dots, drawDots, resolveDotsCollision, addDot, removeDot } from './dots.js';
 const FIELD_SIZE = 600;
 const BALL_RADIUS = 6;
 
 const GRAVITY    = 800;
-const FRICTION   = 0.995;
-const BOUNCE     = 0.75;
-const MIN_SPEED  = 5;
+const FRICTION   = 1.0; // 0.995
+const BOUNCE = 1.0; // стены не гасят скорость
+// const MIN_SPEED  = 5;
 const MAX_SPEED  = 1200;
 const WALL_INNER = 2;
 
@@ -31,6 +32,7 @@ export function initCanvas(canvasElement) {
 
   canvas.addEventListener('mousedown',   onMouseDown);
   canvas.addEventListener('contextmenu', onRightClick);
+  canvas.addEventListener('click', onCanvasClick);
 
   window.addEventListener('blur', () => {
     if (isDragging) {
@@ -125,18 +127,45 @@ function onMouseUp(e) {
 function onRightClick(e) {
   e.preventDefault();
 
-  if (canvas.dataset.mode !== 'play') return;
+  // Edit — удаляем точку
+  if (canvas.dataset.mode === 'edit') {
+    const pos = getPos(e);
+    for (let i = 0; i < dots.length; i++) {
+      const dx = pos.x - dots[i].x;
+      const dy = pos.y - dots[i].y;
+      if (Math.sqrt(dx*dx + dy*dy) <= dots[i].radius * 2) {
+        removeDot(i);
+        return;
+      }
+    }
+    return;
+  }
+
+  // Play — удаляем шарик
+  if (canvas.dataset.mode === 'play') {
+    const pos = getPos(e);
+    for (let i = 0; i < balls.length; i++) {
+      const dx = pos.x - balls[i].x;
+      const dy = pos.y - balls[i].y;
+      if (Math.sqrt(dx*dx + dy*dy) <= balls[i].radius * 3) {
+        balls.splice(i, 1);
+        return;
+      }
+    }
+  }
+}
+
+function onCanvasClick(e) {
+  if (canvas.dataset.mode !== 'edit') return;
 
   const pos = getPos(e);
 
-  for (let i = 0; i < balls.length; i++) {
-    const dx = pos.x - balls[i].x;
-    const dy = pos.y - balls[i].y;
-    if (Math.sqrt(dx*dx + dy*dy) <= balls[i].radius * 3) {
-      balls.splice(i, 1);
-      return;
-    }
-  }
+  // Проверяем не кликнули ли на существующую точку — удаляем по ПКМ позже
+  const margin = WALL_INNER + 8; // 8 = дефолтный радиус точки
+  const x = Math.max(margin, Math.min(FIELD_SIZE - margin, pos.x));
+  const y = Math.max(margin, Math.min(FIELD_SIZE - margin, pos.y));
+
+  addDot(x, y);
 }
 
 // ── Физика ─────────────────────────────────────
@@ -159,14 +188,14 @@ function update(dt) {
 
       // Стены
       resolveWallCollision(b);
-
+      resolveDotsCollision(b);
       // Остановка
-      const speed = Math.sqrt(b.vx**2 + b.vy**2);
-      if (speed < MIN_SPEED && b.y + b.radius >= FIELD_SIZE - WALL_INNER - 1) {
-        b.vx = 0;
-        b.vy = 0;
-        b.active = false;
-      }
+      // const speed = Math.sqrt(b.vx**2 + b.vy**2);
+      // if (speed < MIN_SPEED && b.y + b.radius >= FIELD_SIZE - WALL_INNER - 1) {
+      //   b.vx = 0;
+      //   b.vy = 0;
+      //   b.active = false;
+      // }
     }
 
     // Столкновения между шариками на каждом субшаге
@@ -275,7 +304,7 @@ function draw() {
     ctx.fillStyle = 'white';
     ctx.fill();
   }
-
+  drawDots(ctx);
   // Траектория
   if (isDragging && dragTarget) {
     drawTrajectory(dragTarget);
