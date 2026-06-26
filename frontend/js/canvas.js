@@ -1,4 +1,6 @@
 import { dots, drawDots, resolveDotsCollision, addDot, removeDot } from './dots.js';
+import { initAudio, loadAllSamples, playSample, getNoteFreq } from './audio.js';
+import { getNoteMidi } from './audio.js';
 const FIELD_SIZE = 600;
 const BALL_RADIUS = 6;
 
@@ -25,6 +27,8 @@ function createBall(x, y) {
 
 // ── Инициализация ──────────────────────────────
 export function initCanvas(canvasElement) {
+  // initAudio();
+  // loadAllSamples();
   canvas = canvasElement;
   ctx = canvas.getContext('2d');
   canvas.width  = FIELD_SIZE;
@@ -54,8 +58,18 @@ function getPos(e) {
     y: e.clientY - rect.top
   };
 }
-
+let samplesLoaded = false; // флаг вверху файла 
 function onMouseDown(e) {
+  console.log('mousedown', e.button, canvas.dataset.mode); // ← временно
+
+  initAudio(); // создаёт audioCtx
+  
+  if (!samplesLoaded) {
+    samplesLoaded = true;
+    loadAllSamples();
+  }
+  
+  
   if (e.button !== 0) return;
   if (canvas.dataset.mode !== 'play') return;
 
@@ -188,7 +202,10 @@ function update(dt) {
 
       // Стены
       resolveWallCollision(b);
-      resolveDotsCollision(b);
+      const hitIndex = resolveDotsCollision(b);
+      if (hitIndex !== -1) {
+      playDotSound();
+      }
       // Остановка
       // const speed = Math.sqrt(b.vx**2 + b.vy**2);
       // if (speed < MIN_SPEED && b.y + b.radius >= FIELD_SIZE - WALL_INNER - 1) {
@@ -286,6 +303,14 @@ function resolveWallCollision(b) {
     b.y = FIELD_SIZE - WALL_INNER - b.radius;
     b.vy = -Math.abs(b.vy) * BOUNCE;
   }
+}
+
+// ── Звук точки ─────────────────────────────────
+const AM_PENTATONIC = [57, 60, 62, 64, 67, 69, 72, 74, 76, 79];
+
+function playDotSound() {
+  const midi = AM_PENTATONIC[Math.floor(Math.random() * AM_PENTATONIC.length)];
+  playSample('piano', midi);
 }
 
 // ── Отрисовка ──────────────────────────────────
