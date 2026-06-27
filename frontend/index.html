@@ -28,17 +28,16 @@
   </div>
 
   <script type="module">
-    import { initCanvas } from './js/canvas.js';
+    import { initGame, setMode } from './js/game.js';
 
     const canvas = document.getElementById('gameCanvas');
-    canvas.dataset.mode = 'play';
-    initCanvas(canvas);
+    initGame(canvas);
 
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        canvas.dataset.mode = btn.dataset.mode;
+        setMode(btn.dataset.mode);
       });
     });
   </script>
