@@ -27,8 +27,6 @@ function createBall(x, y) {
 
 // ── Инициализация ──────────────────────────────
 export function initCanvas(canvasElement) {
-  // initAudio();
-  // loadAllSamples();
   canvas = canvasElement;
   ctx = canvas.getContext('2d');
   canvas.width  = FIELD_SIZE;
@@ -36,7 +34,16 @@ export function initCanvas(canvasElement) {
 
   canvas.addEventListener('mousedown',   onMouseDown);
   canvas.addEventListener('contextmenu', onRightClick);
-  canvas.addEventListener('click', onCanvasClick);
+  canvas.addEventListener('click',       onCanvasClick);
+
+  // Preload — грузим семплы при наведении мыши, до первого клика
+  canvas.addEventListener('mouseenter', () => {
+    initAudio();
+    if (!samplesLoaded) {
+      samplesLoaded = true;
+      loadAllSamples();
+    }
+  }, { once: true });
 
   window.addEventListener('blur', () => {
     if (isDragging) {
@@ -64,10 +71,10 @@ function onMouseDown(e) {
 
   initAudio(); // создаёт audioCtx
   
-  if (!samplesLoaded) {
-    samplesLoaded = true;
-    loadAllSamples();
-  }
+  // if (!samplesLoaded) {
+  //   samplesLoaded = true;
+  //   loadAllSamples();
+  // }
   
   
   if (e.button !== 0) return;
